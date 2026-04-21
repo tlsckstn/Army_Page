@@ -100,6 +100,21 @@
     <h2>🫡 일일 현황 보고</h2>
     
     <div class="form-group">
+        <label>성명 선택</label>
+        <select id="name" onchange="autoFillRank()">
+            <option value="">선택하세요</option>
+            <option value="이기백">이기백</option>
+            <option value="안창윤">안창윤</option>
+            <option value="김종윤">김종윤</option>
+            <option value="신찬수">신찬수</option>
+            <option value="박준서">박준서</option>
+            <option value="김노준">김노준</option>
+            <option value="심희승">심희승</option>
+            <option value="정치훈">정치훈</option>
+        </select>
+    </div>
+
+    <div class="form-group">
         <label>계급 선택</label>
         <select id="rank">
             <option value="병장">병장</option>
@@ -110,15 +125,11 @@
     </div>
 
     <div class="form-group">
-        <label>성명</label>
-        <input type="text" id="name" placeholder="이름 입력">
-    </div>
-
-    <div class="form-group">
         <label>오전 일과</label>
         <select id="am_task" onchange="toggleEtc('am')">
             <option value="없음">없음</option>
             <option value="오전 근무">오전 근무</option>
+            <option value="분리수거장 개방">분리수거장 개방</option>
             <option value="전투휴무">전투휴무</option>
             <option value="반투휴무">반투휴무</option>
             <option value="근무취침">근무취침</option>
@@ -209,22 +220,33 @@
         if (sessionStorage.getItem("isLoggedIn") === "true") showMainContent();
     }
 
+    // 이름 선택 시 기존 계급 정보 등을 자동으로 불러오는 편의 기능 (선택 사항)
+    function autoFillRank() {
+        const selectedName = document.getElementById('name').value;
+        if (!selectedName) return;
+        
+        database.ref('daily_status/' + selectedName).once('value', (snapshot) => {
+            const data = snapshot.val();
+            if (data && data.rank) {
+                document.getElementById('rank').value = data.rank;
+            }
+        });
+    }
+
     function toggleEtc(type) {
         const select = document.getElementById(type + '_task');
         const etcInput = document.getElementById(type + '_etc');
         etcInput.className = (select.value === '기타') ? '' : 'hidden';
     }
 
-    // 업로드 시 기존 휴무/휴가 데이터를 보호하기 위해 update 방식 활용
     function uploadData() {
-        const name = document.getElementById('name').value.trim();
-        if(!name) return alert("이름을 입력해주세요.");
+        const name = document.getElementById('name').value;
+        if(!name) return alert("성명을 선택해주세요.");
         
         const today = new Date().toLocaleDateString('en-CA');
         const amTask = document.getElementById('am_task').value === '기타' ? document.getElementById('am_etc').value : document.getElementById('am_task').value;
         const pmTask = document.getElementById('pm_task').value === '기타' ? document.getElementById('pm_etc').value : document.getElementById('pm_task').value;
 
-        // 기본 일과 정보
         const updates = {
             rank: document.getElementById('rank').value,
             name: name,
@@ -237,7 +259,6 @@
             }
         };
 
-        // 입력 폼에 전투휴무/휴가가 채워져 있을 때만 업데이트 반영
         if (document.getElementById('off_date').value) {
             updates.offDate = document.getElementById('off_date').value;
         }
@@ -246,19 +267,18 @@
         }
 
         database.ref('daily_status/' + name).update(updates).then(() => {
-            alert("현황이 서버에 공유되었습니다.");
+            alert(name + "님의 현황이 업로드되었습니다.");
             location.reload(); 
         });
     }
 
-    // 삭제 기능 세분화: 전투휴무 / 휴가 만 삭제하고 나머지 일과는 남겨둠
     function deleteData(name, type) {
         if(type === 'off') {
-            if(confirm(name + "님의 '전투휴무' 일정만 삭제하시겠습니까? (오늘 일과는 유지됩니다)")) {
+            if(confirm(name + "님의 '전투휴무' 일정만 삭제하시겠습니까?")) {
                 database.ref('daily_status/' + name).update({ offDate: null });
             }
         } else if(type === 'vacation') {
-            if(confirm(name + "님의 '휴가' 일정만 삭제하시겠습니까? (오늘 일과는 유지됩니다)")) {
+            if(confirm(name + "님의 '휴가' 일정만 삭제하시겠습니까?")) {
                 database.ref('daily_status/' + name + '/vacation').update({ start: null, end: null });
             }
         }
@@ -272,7 +292,7 @@
             const todayStr = new Date().toLocaleDateString('en-CA');
             
             mgmtList.innerHTML = '';
-            if(!rawData) { reportArea.innerText = "현재 입력된 데이터가 없습니다."; return; }
+            if(!rawData) { reportArea.innerText = "데이터가 없습니다."; return; }
 
             const items = Object.values(rawData).sort((a, b) => (rankPriority[b.rank] || 0) - (rankPriority[a.rank] || 0));
 
@@ -288,15 +308,13 @@
             items.forEach(item => {
                 const isToday = (item.uploadDate === todayStr);
 
-                // 관리 섹션 (전투휴무) - deleteData에 'off' 파라미터 전달
                 if(item.offDate) {
                     mgmtOffHtml += `<div class="list-item"><span>${item.rank} ${item.name} ${item.offDate} (전투휴무)</span><button class="del-btn" onclick="deleteData('${item.name}', 'off')">삭제</button></div>`;
                     offWish += `   ${item.rank} ${item.name} ${item.offDate} (전투휴무)\n`;
                 }
-                // 관리 섹션 (휴가) - deleteData에 'vacation' 파라미터 전달
                 if(item.vacation && item.vacation.start) {
                     mgmtVacHtml += `<div class="list-item"><span>${item.rank} ${item.name} ${item.vacation.start}~${item.vacation.end} (휴가)</span><button class="del-btn" onclick="deleteData('${item.name}', 'vacation')">삭제</button></div>`;
-                    vacList += `   ${item.rank} ${item.name} ${item.vacation.start} ~ ${item.vacation.end} (휴가)\n`;
+                    vacList += `   ${item.rank} ${item.name} (${item.vacation.start} ~ ${item.vacation.end} 휴가)\n`;
                 }
 
                 if(isToday) {
@@ -330,7 +348,7 @@
 
     function copyReport() {
         const text = document.getElementById('report-area').innerText;
-        navigator.clipboard.writeText(text).then(() => alert("보고 양식이 클립보드에 복사되었습니다."));
+        navigator.clipboard.writeText(text).then(() => alert("복사되었습니다!"));
     }
 </script>
 </body>
