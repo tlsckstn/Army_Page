@@ -10,7 +10,7 @@
         :root {
             --bg-dark: #121212;
             --card-bg: #1e1e1e;
-            --primary-accent: #81c784; /* 부대 느낌의 부드러운 녹색 */
+            --primary-accent: #81c784; 
             --text-main: #e0e0e0;
             --text-dim: #b0b0b0;
             --input-bg: #2c2c2c;
@@ -30,7 +30,6 @@
             padding: 20px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.5); 
         }
 
-        /* 로그인 레이어 */
         #login-overlay { 
             position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
             background: var(--bg-dark); display: flex; justify-content: center; 
@@ -67,7 +66,6 @@
 
         .hidden { display: none; }
         
-        /* 관리 섹션 스타일 */
         .management-section { margin-top: 35px; border-top: 1px solid var(--border-color); padding-top: 20px; }
         .mgmt-header { font-size: 16px; font-weight: bold; color: var(--primary-accent); margin-bottom: 10px; display: block; }
         
@@ -79,11 +77,10 @@
         .list-item span { font-size: 14px; }
         .del-btn { width: auto; padding: 6px 12px; background: var(--danger); color: white; font-size: 12px; margin: 0; }
         
-        /* 보고 양식 텍스트 영역 */
         #report-area { 
             margin-top: 30px; background: #000; padding: 15px; 
             border-radius: 8px; white-space: pre-wrap; font-family: 'Courier New', Courier, monospace; 
-            font-size: 13px; border: 1px solid var(--border-color); color: #00ff41; /* 터미널 느낌의 초록색 */
+            font-size: 13px; border: 1px solid var(--border-color); color: #00ff41; 
         }
         .copy-btn { background: #444; color: white; margin-top: 10px; }
     </style>
@@ -218,6 +215,7 @@
         etcInput.className = (select.value === '기타') ? '' : 'hidden';
     }
 
+    // 업로드 시 기존 휴무/휴가 데이터를 보호하기 위해 update 방식 활용
     function uploadData() {
         const name = document.getElementById('name').value.trim();
         if(!name) return alert("이름을 입력해주세요.");
@@ -226,7 +224,8 @@
         const amTask = document.getElementById('am_task').value === '기타' ? document.getElementById('am_etc').value : document.getElementById('am_task').value;
         const pmTask = document.getElementById('pm_task').value === '기타' ? document.getElementById('pm_etc').value : document.getElementById('pm_task').value;
 
-        const data = {
+        // 기본 일과 정보
+        const updates = {
             rank: document.getElementById('rank').value,
             name: name,
             uploadDate: today,
@@ -235,20 +234,33 @@
                 morning: document.getElementById('clean_m').checked,
                 lunch: document.getElementById('clean_l').checked,
                 dinner: document.getElementById('clean_d').checked
-            },
-            offDate: document.getElementById('off_date').value,
-            vacation: { start: document.getElementById('vac_start').value, end: document.getElementById('vac_end').value }
+            }
         };
 
-        database.ref('daily_status/' + name).set(data).then(() => {
+        // 입력 폼에 전투휴무/휴가가 채워져 있을 때만 업데이트 반영
+        if (document.getElementById('off_date').value) {
+            updates.offDate = document.getElementById('off_date').value;
+        }
+        if (document.getElementById('vac_start').value && document.getElementById('vac_end').value) {
+            updates.vacation = { start: document.getElementById('vac_start').value, end: document.getElementById('vac_end').value };
+        }
+
+        database.ref('daily_status/' + name).update(updates).then(() => {
             alert("현황이 서버에 공유되었습니다.");
-            location.reload(); // 입력 후 초기화
+            location.reload(); 
         });
     }
 
-    function deleteData(name) {
-        if(confirm(name + "님의 정보를 영구 삭제하시겠습니까?")) {
-            database.ref('daily_status/' + name).remove();
+    // 삭제 기능 세분화: 전투휴무 / 휴가 만 삭제하고 나머지 일과는 남겨둠
+    function deleteData(name, type) {
+        if(type === 'off') {
+            if(confirm(name + "님의 '전투휴무' 일정만 삭제하시겠습니까? (오늘 일과는 유지됩니다)")) {
+                database.ref('daily_status/' + name).update({ offDate: null });
+            }
+        } else if(type === 'vacation') {
+            if(confirm(name + "님의 '휴가' 일정만 삭제하시겠습니까? (오늘 일과는 유지됩니다)")) {
+                database.ref('daily_status/' + name + '/vacation').update({ start: null, end: null });
+            }
         }
     }
 
@@ -262,7 +274,6 @@
             mgmtList.innerHTML = '';
             if(!rawData) { reportArea.innerText = "현재 입력된 데이터가 없습니다."; return; }
 
-            // 계급순 정렬
             const items = Object.values(rawData).sort((a, b) => (rankPriority[b.rank] || 0) - (rankPriority[a.rank] || 0));
 
             const today = new Date();
@@ -277,18 +288,17 @@
             items.forEach(item => {
                 const isToday = (item.uploadDate === todayStr);
 
-                // 관리 섹션 (전투휴무)
+                // 관리 섹션 (전투휴무) - deleteData에 'off' 파라미터 전달
                 if(item.offDate) {
-                    mgmtOffHtml += `<div class="list-item"><span>${item.rank} ${item.name} ${item.offDate} (전투휴무)</span><button class="del-btn" onclick="deleteData('${item.name}')">삭제</button></div>`;
+                    mgmtOffHtml += `<div class="list-item"><span>${item.rank} ${item.name} ${item.offDate} (전투휴무)</span><button class="del-btn" onclick="deleteData('${item.name}', 'off')">삭제</button></div>`;
                     offWish += `   ${item.rank} ${item.name} ${item.offDate} (전투휴무)\n`;
                 }
-                // 관리 섹션 (휴가)
+                // 관리 섹션 (휴가) - deleteData에 'vacation' 파라미터 전달
                 if(item.vacation && item.vacation.start) {
-                    mgmtVacHtml += `<div class="list-item"><span>${item.rank} ${item.name} ${item.vacation.start}~${item.vacation.end} (휴가)</span><button class="del-btn" onclick="deleteData('${item.name}')">삭제</button></div>`;
-                    vacList += `   ${item.rank} ${item.name} (${item.vacation.start} ~ ${item.vacation.end} 휴가)\n`;
+                    mgmtVacHtml += `<div class="list-item"><span>${item.rank} ${item.name} ${item.vacation.start}~${item.vacation.end} (휴가)</span><button class="del-btn" onclick="deleteData('${item.name}', 'vacation')">삭제</button></div>`;
+                    vacList += `   ${item.rank} ${item.name} ${item.vacation.start} ~ ${item.vacation.end} (휴가)\n`;
                 }
 
-                // 오늘 리포트 (오늘 입력된 것만)
                 if(isToday) {
                     if(item.amTask === '없음') amAvail += `   ${item.rank} ${item.name}\n`;
                     else amEx += `   ${item.rank} ${item.name} - ${item.amTask}\n`;
@@ -297,9 +307,9 @@
                     else pmEx += `   ${item.rank} ${item.name} - ${item.pmTask}\n`;
 
                     let cleans = [];
-                    if(item.cleaning.morning) cleans.push("아침");
-                    if(item.cleaning.lunch) cleans.push("점심");
-                    if(item.cleaning.dinner) cleans.push("저녁");
+                    if(item.cleaning && item.cleaning.morning) cleans.push("아침");
+                    if(item.cleaning && item.cleaning.lunch) cleans.push("점심");
+                    if(item.cleaning && item.cleaning.dinner) cleans.push("저녁");
                     if(cleans.length > 0) cleanList += `   ${item.rank} ${item.name} (${cleans.join(',')})\n`;
                 }
             });
