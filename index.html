@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>체계지원소대 현황판 (Dark)</title>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
+    <style>
+        :root {
+            --bg-dark: #121212;
+            --card-bg: #1e1e1e;
+            --primary-accent: #81c784; /* 부대 느낌의 부드러운 녹색 */
+            --text-main: #e0e0e0;
+            --text-dim: #b0b0b0;
+            --input-bg: #2c2c2c;
+            --border-color: #333;
+            --danger: #ef5350;
+        }
+
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+            background-color: var(--bg-dark); 
+            margin: 0; padding: 15px; color: var(--text-main); 
+            line-height: 1.5;
+        }
+
+        .container { 
+            max-width: 500px; margin: 0 auto; background: var(--card-bg); 
+            padding: 20px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.5); 
+        }
+
+        /* 로그인 레이어 */
+        #login-overlay { 
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+            background: var(--bg-dark); display: flex; justify-content: center; 
+            align-items: center; z-index: 1000; 
+        }
+        .login-box { 
+            background: var(--card-bg); padding: 30px; border-radius: 16px; 
+            width: 85%; max-width: 320px; text-align: center; border: 1px solid var(--border-color);
+        }
+
+        h2 { text-align: center; color: var(--primary-accent); margin-top: 0; margin-bottom: 25px; }
+        h3 { margin-top: 0; color: var(--primary-accent); }
+
+        .form-group { margin-bottom: 18px; }
+        label { display: block; font-weight: 600; margin-bottom: 8px; font-size: 14px; color: var(--text-dim); }
+
+        input, select { 
+            width: 100%; padding: 12px; border: 1px solid var(--border-color); 
+            border-radius: 8px; box-sizing: border-box; font-size: 16px; 
+            background-color: var(--input-bg); color: var(--text-main);
+        }
+        input:focus, select:focus { outline: 2px solid var(--primary-accent); border-color: transparent; }
+
+        .checkbox-group { display: flex; gap: 15px; align-items: center; padding: 5px 0; }
+        .checkbox-group input { width: 20px; height: 20px; cursor: pointer; }
+
+        button { 
+            width: 100%; padding: 14px; border: none; border-radius: 8px; 
+            background: var(--primary-accent); color: #121212; 
+            font-weight: bold; font-size: 16px; cursor: pointer; margin-top: 10px;
+            transition: opacity 0.2s;
+        }
+        button:active { opacity: 0.8; }
+
+        .hidden { display: none; }
+        
+        /* 관리 섹션 스타일 */
+        .management-section { margin-top: 35px; border-top: 1px solid var(--border-color); padding-top: 20px; }
+        .mgmt-header { font-size: 16px; font-weight: bold; color: var(--primary-accent); margin-bottom: 10px; display: block; }
+        
+        .list-item { 
+            background: var(--input-bg); padding: 12px; border-radius: 8px; 
+            margin-bottom: 8px; display: flex; justify-content: space-between; 
+            align-items: center; border-left: 4px solid var(--primary-accent); 
+        }
+        .list-item span { font-size: 14px; }
+        .del-btn { width: auto; padding: 6px 12px; background: var(--danger); color: white; font-size: 12px; margin: 0; }
+        
+        /* 보고 양식 텍스트 영역 */
+        #report-area { 
+            margin-top: 30px; background: #000; padding: 15px; 
+            border-radius: 8px; white-space: pre-wrap; font-family: 'Courier New', Courier, monospace; 
+            font-size: 13px; border: 1px solid var(--border-color); color: #00ff41; /* 터미널 느낌의 초록색 */
+        }
+        .copy-btn { background: #444; color: white; margin-top: 10px; }
+    </style>
+</head>
+<body>
+
+<div id="login-overlay">
+    <div class="login-box">
+        <h3>소대 현황판 접속</h3>
+        <input type="text" id="login-id" placeholder="아이디" style="margin-bottom:10px;">
+        <input type="password" id="login-pw" placeholder="비밀번호" style="margin-bottom:15px;">
+        <button onclick="checkLogin()">로그인</button>
+    </div>
+</div>
+
+<div id="main-content" class="container" style="display: none;">
+    <h2>🫡 일일 현황 보고</h2>
+    
+    <div class="form-group">
+        <label>계급 선택</label>
+        <select id="rank">
+            <option value="병장">병장</option>
+            <option value="상병">상병</option>
+            <option value="일병">일병</option>
+            <option value="이병">이병</option>
+        </select>
+    </div>
+
+    <div class="form-group">
+        <label>성명</label>
+        <input type="text" id="name" placeholder="이름 입력">
+    </div>
+
+    <div class="form-group">
+        <label>오전 일과</label>
+        <select id="am_task" onchange="toggleEtc('am')">
+            <option value="없음">없음</option>
+            <option value="오전 근무">오전 근무</option>
+            <option value="전투휴무">전투휴무</option>
+            <option value="반투휴무">반투휴무</option>
+            <option value="근무취침">근무취침</option>
+            <option value="병기본">병기본</option>
+            <option value="수도병원 외진">수도병원 외진</option>
+            <option value="5대기 투입">5대기 투입</option>
+            <option value="기타">기타 (직접 입력)</option>
+        </select>
+        <input type="text" id="am_etc" class="hidden" style="margin-top:8px;" placeholder="내용을 입력하세요">
+    </div>
+
+    <div class="form-group">
+        <label>오후 일과</label>
+        <select id="pm_task" onchange="toggleEtc('pm')">
+            <option value="없음">없음</option>
+            <option value="오후1 근무">오후1 근무</option>
+            <option value="오후2 근무">오후2 근무</option>
+            <option value="전투휴무">전투휴무</option>
+            <option value="반투휴무">반투휴무</option>
+            <option value="근무취침">근무취침</option>
+            <option value="병기본">병기본</option>
+            <option value="수도병원 외진">수도병원 외진</option>
+            <option value="5대기 투입">5대기 투입</option>
+            <option value="기타">기타 (직접 입력)</option>
+        </select>
+        <input type="text" id="pm_etc" class="hidden" style="margin-top:8px;" placeholder="내용을 입력하세요">
+    </div>
+
+    <div class="form-group">
+        <label>식당청소 여부</label>
+        <div class="checkbox-group">
+            <label><input type="checkbox" id="clean_m"> 아침</label>
+            <label><input type="checkbox" id="clean_l"> 점심</label>
+            <label><input type="checkbox" id="clean_d"> 저녁</label>
+        </div>
+    </div>
+
+    <div class="form-group">
+        <label>전투휴무 예정일</label>
+        <input type="date" id="off_date">
+    </div>
+
+    <div class="form-group">
+        <label>휴가 일정 (시작 ~ 종료)</label>
+        <div style="display: flex; gap: 5px;">
+            <input type="date" id="vac_start">
+            <input type="date" id="vac_end">
+        </div>
+    </div>
+
+    <button onclick="uploadData()">현황 서버 업로드</button>
+
+    <div class="management-section">
+        <span class="mgmt-header">🗓️ 휴무 및 휴가 관리</span>
+        <div id="management-list"></div>
+    </div>
+
+    <div id="report-area"></div>
+    <button class="copy-btn" onclick="copyReport()">📋 텍스트 복사 (보고용)</button>
+</div>
+
+<script>
+    // --- [중요] Firebase 설정 (본인의 URL로 변경) ---
+    const firebaseConfig = {
+        databaseURL: "https://your-project-id.firebaseio.com" 
+    };
+    firebase.initializeApp(firebaseConfig);
+    const database = firebase.database();
+
+    const rankPriority = { "병장": 4, "상병": 3, "일병": 2, "이병": 1 };
+
+    function checkLogin() {
+        const id = document.getElementById('login-id').value;
+        const pw = document.getElementById('login-pw').value;
+        if (id === "55div" && pw === "55div") {
+            sessionStorage.setItem("isLoggedIn", "true");
+            showMainContent();
+        } else { alert("접속 정보가 일치하지 않습니다."); }
+    }
+
+    function showMainContent() {
+        document.getElementById('login-overlay').style.display = 'none';
+        document.getElementById('main-content').style.display = 'block';
+        initRealtimeUpdate();
+    }
+
+    window.onload = function() {
+        if (sessionStorage.getItem("isLoggedIn") === "true") showMainContent();
+    }
+
+    function toggleEtc(type) {
+        const select = document.getElementById(type + '_task');
+        const etcInput = document.getElementById(type + '_etc');
+        etcInput.className = (select.value === '기타') ? '' : 'hidden';
+    }
+
+    function uploadData() {
+        const name = document.getElementById('name').value.trim();
+        if(!name) return alert("이름을 입력해주세요.");
+        
+        const today = new Date().toLocaleDateString('en-CA');
+        const amTask = document.getElementById('am_task').value === '기타' ? document.getElementById('am_etc').value : document.getElementById('am_task').value;
+        const pmTask = document.getElementById('pm_task').value === '기타' ? document.getElementById('pm_etc').value : document.getElementById('pm_task').value;
+
+        const data = {
+            rank: document.getElementById('rank').value,
+            name: name,
+            uploadDate: today,
+            amTask: amTask, pmTask: pmTask,
+            cleaning: {
+                morning: document.getElementById('clean_m').checked,
+                lunch: document.getElementById('clean_l').checked,
+                dinner: document.getElementById('clean_d').checked
+            },
+            offDate: document.getElementById('off_date').value,
+            vacation: { start: document.getElementById('vac_start').value, end: document.getElementById('vac_end').value }
+        };
+
+        database.ref('daily_status/' + name).set(data).then(() => {
+            alert("현황이 서버에 공유되었습니다.");
+            location.reload(); // 입력 후 초기화
+        });
+    }
+
+    function deleteData(name) {
+        if(confirm(name + "님의 정보를 영구 삭제하시겠습니까?")) {
+            database.ref('daily_status/' + name).remove();
+        }
+    }
+
+    function initRealtimeUpdate() {
+        database.ref('daily_status').on('value', (snapshot) => {
+            const rawData = snapshot.val();
+            const mgmtList = document.getElementById('management-list');
+            const reportArea = document.getElementById('report-area');
+            const todayStr = new Date().toLocaleDateString('en-CA');
+            
+            mgmtList.innerHTML = '';
+            if(!rawData) { reportArea.innerText = "현재 입력된 데이터가 없습니다."; return; }
+
+            // 계급순 정렬
+            const items = Object.values(rawData).sort((a, b) => (rankPriority[b.rank] || 0) - (rankPriority[a.rank] || 0));
+
+            const today = new Date();
+            const dateStr = (today.getMonth()+1).toString().padStart(2, '0') + "/" + today.getDate().toString().padStart(2, '0');
+
+            let reportText = `🫡충성! 체계지원소대 ${dateStr}\n인원현황입니다!!❤️\n\n`;
+            let amEx = "", pmEx = "", amAvail = "", pmAvail = "", cleanList = "", offWish = "", vacList = "";
+            
+            let mgmtOffHtml = "<div style='color:#bbb; font-size:12px; margin-bottom:5px;'>[전투휴무 목록]</div>";
+            let mgmtVacHtml = "<div style='color:#bbb; font-size:12px; margin-top:15px; margin-bottom:5px;'>[휴가 목록]</div>";
+
+            items.forEach(item => {
+                const isToday = (item.uploadDate === todayStr);
+
+                // 관리 섹션 (전투휴무)
+                if(item.offDate) {
+                    mgmtOffHtml += `<div class="list-item"><span>${item.rank} ${item.name} ${item.offDate} (전투휴무)</span><button class="del-btn" onclick="deleteData('${item.name}')">삭제</button></div>`;
+                    offWish += `   ${item.rank} ${item.name} ${item.offDate} (전투휴무)\n`;
+                }
+                // 관리 섹션 (휴가)
+                if(item.vacation && item.vacation.start) {
+                    mgmtVacHtml += `<div class="list-item"><span>${item.rank} ${item.name} ${item.vacation.start}~${item.vacation.end} (휴가)</span><button class="del-btn" onclick="deleteData('${item.name}')">삭제</button></div>`;
+                    vacList += `   ${item.rank} ${item.name} (${item.vacation.start} ~ ${item.vacation.end} 휴가)\n`;
+                }
+
+                // 오늘 리포트 (오늘 입력된 것만)
+                if(isToday) {
+                    if(item.amTask === '없음') amAvail += `   ${item.rank} ${item.name}\n`;
+                    else amEx += `   ${item.rank} ${item.name} - ${item.amTask}\n`;
+
+                    if(item.pmTask === '없음') pmAvail += `   ${item.rank} ${item.name}\n`;
+                    else pmEx += `   ${item.rank} ${item.name} - ${item.pmTask}\n`;
+
+                    let cleans = [];
+                    if(item.cleaning.morning) cleans.push("아침");
+                    if(item.cleaning.lunch) cleans.push("점심");
+                    if(item.cleaning.dinner) cleans.push("저녁");
+                    if(cleans.length > 0) cleanList += `   ${item.rank} ${item.name} (${cleans.join(',')})\n`;
+                }
+            });
+
+            mgmtList.innerHTML = mgmtOffHtml + mgmtVacHtml;
+
+            reportText += `* 열외 사유\n    [오전]\n${amEx}\n    [오후]\n${pmEx}\n`;
+            reportText += `* 오전 가용인원\n${amAvail}\n`;
+            reportText += `* 오후 가용인원\n${pmAvail}\n`;
+            reportText += `* 식청\n${cleanList}\n`;
+            reportText += `* 전투휴무 희망\n${offWish}\n`;
+            reportText += `* 휴가\n${vacList}\n`;
+            reportText += `이상입니다!`;
+
+            reportArea.innerText = reportText;
+        });
+    }
+
+    function copyReport() {
+        const text = document.getElementById('report-area').innerText;
+        navigator.clipboard.writeText(text).then(() => alert("보고 양식이 클립보드에 복사되었습니다."));
+    }
+</script>
+</body>
+</html>
