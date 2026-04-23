@@ -193,7 +193,7 @@
 <script>
     // --- [중요] Firebase 설정 (본인의 URL로 변경) ---
     const firebaseConfig = {
-        databaseURL: "https://your-project-id.firebaseio.com" 
+        databaseURL: "https://armypage-default-rtdb.firebaseio.com/" 
     };
     firebase.initializeApp(firebaseConfig);
     const database = firebase.database();
@@ -222,12 +222,9 @@
     function autoFillRank() {
         const selectedName = document.getElementById('name').value;
         if (!selectedName) return;
-        
         database.ref('daily_status/' + selectedName).once('value', (snapshot) => {
             const data = snapshot.val();
-            if (data && data.rank) {
-                document.getElementById('rank').value = data.rank;
-            }
+            if (data && data.rank) { document.getElementById('rank').value = data.rank; }
         });
     }
 
@@ -272,13 +269,9 @@
 
     function deleteData(name, type) {
         if(type === 'off') {
-            if(confirm(name + "님의 '전투휴무' 일정만 삭제하시겠습니까?")) {
-                database.ref('daily_status/' + name).update({ offDate: null });
-            }
+            database.ref('daily_status/' + name).update({ offDate: null });
         } else if(type === 'vacation') {
-            if(confirm(name + "님의 '휴가' 일정만 삭제하시겠습니까?")) {
-                database.ref('daily_status/' + name + '/vacation').update({ start: null, end: null });
-            }
+            database.ref('daily_status/' + name + '/vacation').update({ start: null, end: null });
         }
     }
 
@@ -287,14 +280,15 @@
             const rawData = snapshot.val();
             const mgmtList = document.getElementById('management-list');
             const reportArea = document.getElementById('report-area');
-            const todayStr = new Date().toLocaleDateString('en-CA');
+            const todayObj = new Date();
+            const todayStr = todayObj.toLocaleDateString('en-CA');
             
             mgmtList.innerHTML = '';
             if(!rawData) { reportArea.innerText = "데이터가 없습니다."; return; }
 
             const items = Object.values(rawData).sort((a, b) => (rankPriority[b.rank] || 0) - (rankPriority[a.rank] || 0));
 
-            // [날짜 수정 부분] 내일 날짜 계산
+            // 내일 날짜 (보고용 타이틀)
             const tomorrow = new Date();
             tomorrow.setDate(tomorrow.getDate() + 1); 
             const dateStr = (tomorrow.getMonth() + 1).toString().padStart(2, '0') + "/" + tomorrow.getDate().toString().padStart(2, '0');
@@ -306,14 +300,27 @@
             let mgmtVacHtml = "<div style='color:#bbb; font-size:12px; margin-top:15px; margin-bottom:5px;'>[휴가 목록]</div>";
 
             items.forEach(item => {
+                // --- 자동 만료 삭제 로직 시작 ---
+                // 1. 전투휴무 자동 삭제 (예정일이 오늘보다 이전이면 삭제)
+                if (item.offDate && item.offDate < todayStr) {
+                    deleteData(item.name, 'off');
+                    return; // 다음 루프에서 처리
+                }
+                // 2. 휴가 자동 삭제 (종료일이 오늘보다 이전이면 삭제)
+                if (item.vacation && item.vacation.end && item.vacation.end < todayStr) {
+                    deleteData(item.name, 'vacation');
+                    return; // 다음 루프에서 처리
+                }
+                // --- 자동 만료 삭제 로직 끝 ---
+
                 const isToday = (item.uploadDate === todayStr);
 
                 if(item.offDate) {
-                    mgmtOffHtml += `<div class="list-item"><span>${item.rank} ${item.name} ${item.offDate} (전투휴무)</span><button class="del-btn" onclick="deleteData('${item.name}', 'off')">삭제</button></div>`;
+                    mgmtOffHtml += `<div class="list-item"><span>${item.rank} ${item.name} ${item.offDate} (전투휴무)</span><button class="del-btn" onclick="if(confirm('삭제하시겠습니까?')) deleteData('${item.name}', 'off')">삭제</button></div>`;
                     offWish += `   ${item.rank} ${item.name} ${item.offDate} (전투휴무)\n`;
                 }
                 if(item.vacation && item.vacation.start) {
-                    mgmtVacHtml += `<div class="list-item"><span>${item.rank} ${item.name} ${item.vacation.start}~${item.vacation.end} (휴가)</span><button class="del-btn" onclick="deleteData('${item.name}', 'vacation')">삭제</button></div>`;
+                    mgmtVacHtml += `<div class="list-item"><span>${item.rank} ${item.name} ${item.vacation.start}~${item.vacation.end} (휴가)</span><button class="del-btn" onclick="if(confirm('삭제하시겠습니까?')) deleteData('${item.name}', 'vacation')">삭제</button></div>`;
                     vacList += `   ${item.rank} ${item.name} ${item.vacation.start} ~ ${item.vacation.end} (휴가)\n`;
                 }
 
