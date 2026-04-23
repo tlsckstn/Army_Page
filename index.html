@@ -129,7 +129,6 @@
         <select id="am_task" onchange="toggleEtc('am')">
             <option value="없음">없음</option>
             <option value="오전 근무">오전 근무</option>
-            <option value="분리수거장 개방">분리수거장 개방</option>
             <option value="전투휴무">전투휴무</option>
             <option value="반투휴무">반투휴무</option>
             <option value="근무취침">근무취침</option>
@@ -194,7 +193,7 @@
 <script>
     // --- [중요] Firebase 설정 (본인의 URL로 변경) ---
     const firebaseConfig = {
-        databaseURL: "https://armypage-default-rtdb.firebaseio.com/" 
+        databaseURL: "https://your-project-id.firebaseio.com" 
     };
     firebase.initializeApp(firebaseConfig);
     const database = firebase.database();
@@ -204,7 +203,7 @@
     function checkLogin() {
         const id = document.getElementById('login-id').value;
         const pw = document.getElementById('login-pw').value;
-        if (id === "55" && pw === "55") {
+        if (id === "55div" && pw === "55div") {
             sessionStorage.setItem("isLoggedIn", "true");
             showMainContent();
         } else { alert("접속 정보가 일치하지 않습니다."); }
@@ -220,7 +219,6 @@
         if (sessionStorage.getItem("isLoggedIn") === "true") showMainContent();
     }
 
-    // 이름 선택 시 기존 계급 정보 등을 자동으로 불러오는 편의 기능 (선택 사항)
     function autoFillRank() {
         const selectedName = document.getElementById('name').value;
         if (!selectedName) return;
@@ -296,8 +294,10 @@
 
             const items = Object.values(rawData).sort((a, b) => (rankPriority[b.rank] || 0) - (rankPriority[a.rank] || 0));
 
-            const today = new Date();
-            const dateStr = (today.getMonth()+1).toString().padStart(2, '0') + "/" + today.getDate().toString().padStart(2, '0');
+            // [날짜 수정 부분] 내일 날짜 계산
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1); 
+            const dateStr = (tomorrow.getMonth() + 1).toString().padStart(2, '0') + "/" + tomorrow.getDate().toString().padStart(2, '0');
 
             let reportText = `🫡충성! 체계지원소대 ${dateStr}\n인원현황입니다!!❤️\n\n`;
             let amEx = "", pmEx = "", amAvail = "", pmAvail = "", cleanList = "", offWish = "", vacList = "";
@@ -314,7 +314,7 @@
                 }
                 if(item.vacation && item.vacation.start) {
                     mgmtVacHtml += `<div class="list-item"><span>${item.rank} ${item.name} ${item.vacation.start}~${item.vacation.end} (휴가)</span><button class="del-btn" onclick="deleteData('${item.name}', 'vacation')">삭제</button></div>`;
-                    vacList += `   ${item.rank} ${item.name} (${item.vacation.start} ~ ${item.vacation.end} 휴가)\n`;
+                    vacList += `   ${item.rank} ${item.name} ${item.vacation.start} ~ ${item.vacation.end} (휴가)\n`;
                 }
 
                 if(isToday) {
