@@ -191,7 +191,7 @@
 </div>
 
 <script>
-    // --- [중요] Firebase 설정 (본인의 URL로 변경) ---
+    // --- Firebase 설정 ---
     const firebaseConfig = {
         databaseURL: "https://armypage-default-rtdb.firebaseio.com/" 
     };
@@ -288,7 +288,6 @@
 
             const items = Object.values(rawData).sort((a, b) => (rankPriority[b.rank] || 0) - (rankPriority[a.rank] || 0));
 
-            // 내일 날짜 (보고용 타이틀)
             const tomorrow = new Date();
             tomorrow.setDate(tomorrow.getDate() + 1); 
             const dateStr = (tomorrow.getMonth() + 1).toString().padStart(2, '0') + "/" + tomorrow.getDate().toString().padStart(2, '0');
@@ -300,18 +299,15 @@
             let mgmtVacHtml = "<div style='color:#bbb; font-size:12px; margin-top:15px; margin-bottom:5px;'>[휴가 목록]</div>";
 
             items.forEach(item => {
-                // --- 자동 만료 삭제 로직 시작 ---
-                // 1. 전투휴무 자동 삭제 (예정일이 오늘보다 이전이면 삭제)
-                if (item.offDate && item.offDate < todayStr) {
+                // --- 당일 포함 자동 만료 삭제 (<= 사용) ---
+                if (item.offDate && item.offDate <= todayStr) {
                     deleteData(item.name, 'off');
-                    return; // 다음 루프에서 처리
+                    return; 
                 }
-                // 2. 휴가 자동 삭제 (종료일이 오늘보다 이전이면 삭제)
-                if (item.vacation && item.vacation.end && item.vacation.end < todayStr) {
+                if (item.vacation && item.vacation.end && item.vacation.end <= todayStr) {
                     deleteData(item.name, 'vacation');
-                    return; // 다음 루프에서 처리
+                    return; 
                 }
-                // --- 자동 만료 삭제 로직 끝 ---
 
                 const isToday = (item.uploadDate === todayStr);
 
